@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-#-- copyright
+# -- copyright
 # OpenProject is an open source project management software.
 # Copyright (C) the OpenProject GmbH
 #
@@ -26,32 +26,38 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #
 # See COPYRIGHT and LICENSE files for more details.
-#++
+# ++
 
-class ServiceAccount < User
-  alias_attribute(:name, :lastname)
-  validates :name, presence: true
-  validates :name, length: { maximum: 256 }
+require "spec_helper"
 
-  has_one :service_account_association, dependent: :destroy
+RSpec.describe TimeEntries::Scopes::Ongoing do
+  let(:user) { create(:user) }
+  let(:project) { create(:project, public: false) }
+  let(:work_package) { create(:work_package, project: project) }
+  let(:ongoing_time_entry) { create(:time_entry, user:, entity: work_package, ongoing: true) }
+  let(:work_package_role) { create(:work_package_role, permissions: work_package_permissions) }
 
-  delegate :service, to: :service_account_association
+  subject { TimeEntry.visible_ongoing(user) }
 
-  def to_s
-    name
+  shared_context "for the default use case" do
+    context "when the user has log_own_time permission directly on the work package" do
+      let(:work_package_permissions) { [:log_own_time] }
+
+      before do
+        create(:member, project: project, entity: work_package, user:, roles: [work_package_role])
+      end
+
+      it "returns the visible, ongoing time entry" do
+        expect(subject).to contain_exactly(ongoing_time_entry)
+      end
+    end
   end
 
-  def available_custom_fields = []
-
-  def logged? = true
-
-  def builtin? = true
-
-  def mail = ""
-
-  def time_zone
-    ActiveSupport::TimeZone[Setting.user_default_timezone.presence || "Etc/UTC"]
+  context "in regular instances", with_settings: { large_instance_wp_allowed_to_sql: false } do
+    include_context "for the default use case"
   end
 
-  def rss_key = nil
+  context "in large instances", with_settings: { large_instance_wp_allowed_to_sql: true } do
+    include_context "for the default use case"
+  end
 end
